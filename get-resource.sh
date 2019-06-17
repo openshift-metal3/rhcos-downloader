@@ -41,8 +41,19 @@ if [ "$FILECACHED" == "${RHCOS_IMAGE_FILENAME_OPENSTACK}" ] ; then
     curl -O "$CACHEURL/$RHCOS_IMAGE_FILENAME_OPENSTACK/$RHCOS_IMAGE_FILENAME_OPENSTACK"
     curl -O "$CACHEURL/$RHCOS_IMAGE_FILENAME_OPENSTACK/$RHCOS_IMAGE_FILENAME_COMPRESSED.md5sum"
 else
-    curl --insecure --compressed -L --dump-header "${RHCOS_IMAGE_FILENAME_OPENSTACK}.headers" -o "${RHCOS_IMAGE_FILENAME_OPENSTACK}" "${RHCOS_IMAGE_URL}/${RHCOS_IMAGE_FILENAME_OPENSTACK}"
-    qemu-img convert -O qcow2 -c "$RHCOS_IMAGE_FILENAME_OPENSTACK" "$RHCOS_IMAGE_FILENAME_COMPRESSED"
+    # Check for a cached copy of the file on the host in the VM/bootstrap case
+    if virt-what | grep -q kvm; then
+        DEFAULT_GW=$(ip r | grep default | grep dhcp | awk '{print $3}')
+        if curl -I http://$DEFAULT_GW/images/$RHCOS_IMAGE_FILENAME_COMPRESSED; then
+            curl -o "$RHCOS_IMAGE_FILENAME_COMPRESSED" http://$DEFAULT_GW/images/$RHCOS_IMAGE_FILENAME_COMPRESSED
+        else
+            curl --insecure --compressed -L --dump-header "${RHCOS_IMAGE_FILENAME_OPENSTACK}.headers" -o "${RHCOS_IMAGE_FILENAME_OPENSTACK}" "${RHCOS_IMAGE_URL}/${RHCOS_IMAGE_FILENAME_OPENSTACK}"
+            qemu-img convert -O qcow2 -c "$RHCOS_IMAGE_FILENAME_OPENSTACK" "$RHCOS_IMAGE_FILENAME_COMPRESSED"
+        fi
+    else
+        curl --insecure --compressed -L --dump-header "${RHCOS_IMAGE_FILENAME_OPENSTACK}.headers" -o "${RHCOS_IMAGE_FILENAME_OPENSTACK}" "${RHCOS_IMAGE_URL}/${RHCOS_IMAGE_FILENAME_OPENSTACK}"
+        qemu-img convert -O qcow2 -c "$RHCOS_IMAGE_FILENAME_OPENSTACK" "$RHCOS_IMAGE_FILENAME_COMPRESSED"
+    fi
     md5sum "$RHCOS_IMAGE_FILENAME_COMPRESSED" | cut -f 1 -d " " > "$RHCOS_IMAGE_FILENAME_COMPRESSED.md5sum"
 fi
 
